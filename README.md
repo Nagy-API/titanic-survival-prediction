@@ -142,7 +142,7 @@ titanic-survival-prediction/
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/titanic-survival-prediction.git
+git clone https://github.com/Nagy-API/titanic-survival-prediction.git
 cd titanic-survival-prediction
 ```
 
@@ -209,6 +209,18 @@ Example output:
   "survival_probability": 0.4213
 }
 ```
+
+## Kaggle Notebook
+
+The notebook version of this project is also available on Kaggle:
+
+https://www.kaggle.com/code/mlnagy/titanic-survival-prediction
+
+## Kaggle Dataset
+
+The dataset version is available on Kaggle:
+
+https://www.kaggle.com/datasets/mlnagy/titanic-survival-prediction-dataset
 
 ## Important Note
 
