@@ -1,158 +1,166 @@
 # Titanic Survival Prediction
 
-This project uses machine learning to predict whether a Titanic passenger was likely to survive based on passenger information such as class, sex, age, fare, family size, cabin availability, and embarked port.
+A machine learning classification project that predicts whether a Titanic passenger was likely to survive based on passenger details such as class, sex, age, fare, family size, cabin availability, and embarked port.
 
-The project includes data analysis, preprocessing, feature engineering, model training, a saved machine learning model, a FastAPI backend, and a simple web interface.
+This upgraded version includes a clean scikit-learn training workflow, a saved full pipeline model, a FastAPI web app, a premium Titanic-themed dashboard UI, and SQLite prediction history.
 
-## Project Overview
+## Project Highlights
 
-The goal of this project is to build a machine learning model that predicts Titanic passenger survival.
-
-The model uses the following input features:
-
-- Passenger Class
-- Name
-- Sex
-- Age
-- Number of Siblings or Spouses aboard
-- Number of Parents or Children aboard
-- Fare
-- Cabin
-- Embarked Port
-
-The target variable is:
-
-- Survived
-
-This is a binary classification problem where the model predicts whether a passenger survived or did not survive.
-
-## Screenshots
-
-### Web Interface
-
-![Web Interface](Img/frontend-preview.png)
-
-### FastAPI Documentation
-
-![FastAPI Docs](Img/api-docs.png)
-
-## Project Workflow
-
-The notebook follows these steps:
-
-1. Import required libraries
-2. Load and inspect the dataset
-3. Explore missing values and duplicated records
-4. Perform exploratory data analysis
-5. Clean and preprocess the dataset
-6. Create feature engineering variables
-7. Train machine learning models
-8. Evaluate model performance
-9. Save the trained model using Joblib
-10. Use the saved model in a FastAPI application
-11. Create a simple web interface to interact with the API
+- End-to-end binary classification workflow
+- Professional preprocessing with `Pipeline` and `ColumnTransformer`
+- Reusable feature engineering transformer
+- `DummyClassifier` baseline comparison
+- Cross-validation on the training set only
+- Final test evaluation with classification metrics and ROC AUC
+- Saved full pipeline model using Joblib
+- FastAPI backend
+- Titanic-themed web dashboard
+- SQLite prediction history
+- Use-again and details actions for previous predictions
 
 ## Dataset
 
-The dataset contains passenger information from the Titanic dataset.
+The project uses the Titanic passenger dataset.
 
-Some important columns include:
+Important input columns:
 
-- Pclass
-- Name
-- Sex
-- Age
-- SibSp
-- Parch
-- Fare
-- Cabin
-- Embarked
-- Survived
+- `Pclass`
+- `Name`
+- `Sex`
+- `Age`
+- `SibSp`
+- `Parch`
+- `Fare`
+- `Cabin`
+- `Embarked`
 
-The dataset includes both numerical and categorical features, and some columns contain missing values.
+Target column:
+
+- `Survived`
 
 ## Feature Engineering
 
-Several new features were created to improve model performance and make the data more useful for prediction.
+The custom feature engineering transformer is stored in:
 
-The main engineered features include:
+```text
+app/ml_pipeline.py
+```
 
-- Title extracted from passenger names
-- HasCabin to indicate whether a passenger had cabin information
-- FamilySize based on SibSp and Parch
-- IsAlone to identify passengers traveling alone
-- LogFare to reduce skewness in the Fare column
+Engineered features include:
 
-These features help the model capture more meaningful patterns from the original dataset.
+- `Title`: extracted from passenger names
+- `HasCabin`: whether cabin information exists
+- `FamilySize`: `SibSp + Parch + 1`
+- `IsAlone`: whether the passenger traveled alone
+- `LogFare`: log-transformed fare
+
+Keeping this logic in one module makes the notebook and FastAPI app consistent.
+
+## Model Comparison
+
+Models were compared using 5-fold stratified cross-validation on the training set.
+
+| Model | CV Accuracy | CV F1 | CV ROC AUC |
+|---|---:|---:|---:|
+| Dummy Baseline | ~0.617 | ~0.000 | ~0.500 |
+| Logistic Regression | ~0.824 | ~0.768 | ~0.875 |
+| Random Forest | ~0.830 | ~0.765 | ~0.874 |
 
 ## Final Model
 
-The final saved object contains:
-
-- Trained machine learning model
-- Scaler
-- Final training columns
-
-The model file was saved as:
+Final selected model:
 
 ```text
-model.pkl
+Logistic Regression Pipeline
 ```
 
-## FastAPI Application
+It was selected because it achieved strong performance while staying simple, explainable, and suitable for a portfolio classification project.
 
-The FastAPI backend loads the saved model and receives passenger information through a `/predict` endpoint.
+Final test results:
 
-The API returns:
+| Metric | Score |
+|---|---:|
+| Accuracy | ~0.827 |
+| Precision | ~0.788 |
+| Recall | ~0.754 |
+| F1-score | ~0.770 |
+| ROC AUC | ~0.865 |
 
-- Prediction result
-- Prediction code
-- Survival probability
+The saved model file is:
+
+```text
+model/model.pkl
+```
+
+The model file contains the full pipeline:
+
+- Feature engineering
+- Missing value handling
+- Scaling
+- One-hot encoding
+- Classifier
+
+## Web App
+
+The web app now runs through FastAPI instead of opening a plain static HTML file. This allows the app to save predictions and display history.
+
+Main features:
+
+- Passenger input form
+- Survival prediction label
+- Survival probability gauge
+- SQLite prediction history
+- Details button for each saved prediction
+- Use Again button to refill the form from history
+- Clear History action
+- JSON API endpoint for programmatic predictions
 
 ## Project Structure
 
 ```text
-titanic-survival-prediction/
+Titanic/
 │
 ├── app/
-│   ├── main.py
-│   └── index.html
+│   ├── __init__.py
+│   ├── index.html                 # Local helper page
+│   ├── main.py                    # FastAPI app
+│   ├── ml_pipeline.py             # Reusable feature engineering
+│   ├── static/
+│   │   ├── script.js
+│   │   └── style.css
+│   └── templates/
+│       └── index.html             # Main dashboard UI
 │
 ├── data/
 │   └── Titanic-Dataset.csv
 │
+├── database/
+│   └── .gitkeep                   # Runtime DB is generated locally
+│
 ├── model/
-│   └── model.pkl
+│   ├── model.pkl
+│   ├── metrics.json
+│   └── model_comparison.csv
 │
 ├── notebook/
-│   └── Titanic.ipynb
+│   ├── Titanic.ipynb
+│   └── model.pkl
 │
-├── Img/
-│   ├── frontend-preview.png
-│   └── api-docs.png
 │
 ├── requirements.txt
 ├── README.md
-├── .gitignore
-└── LICENSE
+└── .gitignore
 ```
 
-## How to Run the Project
+## How to Run
 
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/Nagy-API/titanic-survival-prediction.git
-cd titanic-survival-prediction
-```
-
-### 2. Install dependencies
+### 1. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Run the FastAPI server
+### 2. Run the FastAPI server
 
 From the main project folder, run:
 
@@ -160,41 +168,45 @@ From the main project folder, run:
 uvicorn app.main:app --reload
 ```
 
-The API will run at:
+### 3. Open the web app
+
+Open:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-You can open the API documentation here:
+API documentation:
 
 ```text
 http://127.0.0.1:8000/docs
 ```
 
-### 4. Open the web interface
-
-Open this file in the browser:
+Health check:
 
 ```text
-app/index.html
+http://127.0.0.1:8000/health
 ```
 
-Then enter passenger information and click the prediction button.
-
 ## API Example
+
+Endpoint:
+
+```text
+POST /api/predict
+```
 
 Example input:
 
 ```json
 {
   "Pclass": 3,
-  "Name": "Yousef, Mr. Nagy",
+  "Name": "Nagy, Mr. Youssef",
   "Sex": "male",
-  "Age": 20,
+  "Age": 23,
   "SibSp": 1,
   "Parch": 0,
-  "Fare": 2000,
+  "Fare": 12.5,
   "Cabin": null,
   "Embarked": "S"
 }
@@ -206,35 +218,13 @@ Example output:
 {
   "prediction": "Not Survived",
   "prediction_code": 0,
-  "survival_probability": 0.4213
+  "survival_probability": 0.2146,
+  "survival_percentage": 21.5
 }
 ```
 
-## Kaggle Notebook
+## Notes
 
-The notebook version of this project is also available on Kaggle:
-
-https://www.kaggle.com/code/mlnagy/titanic-survival-prediction
-
-## Kaggle Dataset
-
-The dataset version is available on Kaggle:
-
-https://www.kaggle.com/datasets/mlnagy/titanic-survival-prediction-dataset
-
-## Important Note
-
-This project is mainly useful for demonstrating a complete machine learning workflow, including data analysis, preprocessing, feature engineering, model training, model saving, API deployment, and frontend integration.
-
-## Technologies Used
-
-- Python
-- Pandas
-- NumPy
-- Scikit-learn
-- Matplotlib
-- Seaborn
-- FastAPI
-- HTML
-- CSS
-- JavaScript
+- The SQLite database is created automatically at runtime in the `database/` folder.
+- Runtime database files are ignored by Git using `.gitignore`.
+- To preserve consistency, the API uses the saved full pipeline directly instead of manually repeating preprocessing steps.

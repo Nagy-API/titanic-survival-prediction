@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Titanic Survival Prediction</title>
+
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: Arial, sans-serif;
+      }
+
+      body {
+        min-height: 100vh;
+        background: linear-gradient(135deg, #e0f2fe, #f8fafc);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 24px;
+        color: #1f2937;
+      }
+
+      .container {
+        width: 100%;
+        max-width: 1050px;
+        display: grid;
+        grid-template-columns: 1fr 1.15fr;
+        gap: 24px;
+      }
+
+      .info-card,
+      .form-card {
+        background: #ffffff;
+        border-radius: 22px;
+        box-shadow: 0 20px 45px rgba(15, 23, 42, 0.12);
+        padding: 32px;
+      }
+
+      .info-card {
+        background: linear-gradient(160deg, #0f172a, #1d4ed8);
+        color: white;
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      .info-card::after {
+        content: "";
+        position: absolute;
+        width: 230px;
+        height: 230px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.1);
+        right: -70px;
+        bottom: -70px;
+      }
+
+      .badge {
+        display: inline-block;
+        width: fit-content;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.16);
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        font-size: 13px;
+        margin-bottom: 24px;
+      }
+
+      h1 {
+        font-size: 34px;
+        line-height: 1.15;
+        margin-bottom: 16px;
+      }
+
+      .info-card p {
+        font-size: 16px;
+        line-height: 1.7;
+        opacity: 0.92;
+        max-width: 420px;
+      }
+
+      .features {
+        margin-top: 36px;
+        display: grid;
+        gap: 12px;
+        position: relative;
+        z-index: 1;
+      }
+
+      .feature-item {
+        background: rgba(255, 255, 255, 0.14);
+        padding: 12px 14px;
+        border-radius: 14px;
+        font-size: 14px;
+      }
+
+      .form-card h2 {
+        font-size: 28px;
+        margin-bottom: 8px;
+        color: #111827;
+      }
+
+      .subtitle {
+        color: #6b7280;
+        margin-bottom: 24px;
+        line-height: 1.5;
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .form-group.full {
+        grid-column: span 2;
+      }
+
+      label {
+        font-size: 14px;
+        font-weight: 700;
+        color: #374151;
+      }
+
+      input,
+      select {
+        width: 100%;
+        padding: 13px 14px;
+        border: 1px solid #d1d5db;
+        border-radius: 12px;
+        font-size: 15px;
+        outline: none;
+        transition: 0.2s ease;
+        background: #ffffff;
+      }
+
+      input:focus,
+      select:focus {
+        border-color: #2563eb;
+        box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+      }
+
+      button {
+        width: 100%;
+        margin-top: 22px;
+        border: none;
+        padding: 15px 18px;
+        border-radius: 14px;
+        background: #2563eb;
+        color: white;
+        font-size: 16px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: 0.2s ease;
+      }
+
+      button:hover {
+        background: #1d4ed8;
+        transform: translateY(-1px);
+      }
+
+      button:disabled {
+        background: #93c5fd;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .result-card {
+        margin-top: 22px;
+        padding: 20px;
+        border-radius: 16px;
+        border: 1px solid #e5e7eb;
+        background: #f9fafb;
+        display: none;
+      }
+
+      .result-card.show {
+        display: block;
+      }
+
+      .result-title {
+        color: #6b7280;
+        font-size: 14px;
+        margin-bottom: 8px;
+      }
+
+      .result-value {
+        font-size: 28px;
+        font-weight: 900;
+        margin-bottom: 10px;
+      }
+
+      .survived {
+        color: #16a34a;
+      }
+
+      .not-survived {
+        color: #dc2626;
+      }
+
+      .probability-text {
+        font-size: 14px;
+        color: #4b5563;
+        margin-bottom: 10px;
+      }
+
+      .probability-bar {
+        width: 100%;
+        height: 12px;
+        background: #e5e7eb;
+        border-radius: 999px;
+        overflow: hidden;
+      }
+
+      .probability-fill {
+        height: 100%;
+        width: 0%;
+        background: #2563eb;
+        border-radius: 999px;
+        transition: width 0.3s ease;
+      }
+
+      .error {
+        color: #dc2626;
+        font-weight: 700;
+        line-height: 1.5;
+      }
+
+      .api-note {
+        margin-top: 16px;
+        color: #6b7280;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      code {
+        background: #eef2ff;
+        color: #3730a3;
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+
+      @media (max-width: 900px) {
+        .container {
+          grid-template-columns: 1fr;
+        }
+
+        .form-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .form-group.full {
+          grid-column: span 1;
+        }
+
+        h1 {
+          font-size: 28px;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <main class="container">
+      <section class="info-card">
+        <div>
+          <span class="badge">Machine Learning API</span>
+          <h1>Titanic Survival Prediction</h1>
+          <p>
+            Enter passenger information and the model will predict whether the
+            passenger is likely to survive or not.
+          </p>
+        </div>
+
+        <div class="features">
+          <div class="feature-item">Passenger Class</div>
+          <div class="feature-item">Name and Title Extraction</div>
+          <div class="feature-item">Age, Fare, and Family Size</div>
+          <div class="feature-item">Cabin Availability</div>
+          <div class="feature-item">Embarked Port</div>
+        </div>
+      </section>
+
+      <section class="form-card">
+        <h2>Prediction Form</h2>
+        <p class="subtitle">
+          Fill in the passenger details below, then send the data to your
+          FastAPI model.
+        </p>
+
+        <form id="predictionForm">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="pclass">Passenger Class</label>
+              <select id="pclass" required>
+                <option value="1">Pclass 1</option>
+                <option value="2">Pclass 2</option>
+                <option value="3" selected>Pclass 3</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="sex">Sex</label>
+              <select id="sex" required>
+                <option value="male" selected>male</option>
+                <option value="female">female</option>
+              </select>
+            </div>
+
+            <div class="form-group full">
+              <label for="name">Passenger Name</label>
+              <input
+                type="text"
+                id="name"
+                placeholder="Example: Yousef, Mr. Nagy"
+                required
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="age">Age</label>
+              <input
+                type="number"
+                id="age"
+                min="0"
+                max="100"
+                step="0.1"
+                placeholder="Example: 25"
+                required
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="fare">Fare</label>
+              <input
+                type="number"
+                id="fare"
+                min="0"
+                step="0.01"
+                placeholder="Example: 35"
+                required
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="sibsp">Siblings / Spouses</label>
+              <input
+                type="number"
+                id="sibsp"
+                min="0"
+                step="1"
+                placeholder="Example: 1"
+                required
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="parch">Parents / Children</label>
+              <input
+                type="number"
+                id="parch"
+                min="0"
+                step="1"
+                placeholder="Example: 0"
+                required
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="cabin">Cabin</label>
+              <input
+                type="text"
+                id="cabin"
+                placeholder="Optional, example: C85"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="embarked">Embarked</label>
+              <select id="embarked" required>
+                <option value="S" selected>S</option>
+                <option value="C">C</option>
+                <option value="Q">Q</option>
+              </select>
+            </div>
+          </div>
+
+          <button type="submit" id="predictBtn">Predict Survival</button>
+        </form>
+
+        <div class="result-card" id="resultCard">
+          <p class="result-title">Prediction Result</p>
+          <p class="result-value" id="resultText"></p>
+          <p class="probability-text" id="probabilityText"></p>
+          <div class="probability-bar">
+            <div class="probability-fill" id="probabilityFill"></div>
+          </div>
+        </div>
+
+        <p class="api-note">
+          Make sure your FastAPI server is running on
+          <code>http://127.0.0.1:8000</code>.
+        </p>
+      </section>
+    </main>
+
+    <script>
+      const API_URL = "http://127.0.0.1:8000/predict";
+
+      const form = document.getElementById("predictionForm");
+      const predictBtn = document.getElementById("predictBtn");
+      const resultCard = document.getElementById("resultCard");
+      const resultText = document.getElementById("resultText");
+      const probabilityText = document.getElementById("probabilityText");
+      const probabilityFill = document.getElementById("probabilityFill");
+
+      form.addEventListener("submit", async function (event) {
+        event.preventDefault();
+
+        resultCard.classList.remove("show");
+        resultText.className = "result-value";
+        resultText.textContent = "";
+        probabilityText.textContent = "";
+        probabilityFill.style.width = "0%";
+
+        const cabinValue = document.getElementById("cabin").value.trim();
+
+        const passengerData = {
+          Pclass: parseInt(document.getElementById("pclass").value),
+          Name: document.getElementById("name").value.trim(),
+          Sex: document.getElementById("sex").value,
+          Age: parseFloat(document.getElementById("age").value),
+          SibSp: parseInt(document.getElementById("sibsp").value),
+          Parch: parseInt(document.getElementById("parch").value),
+          Fare: parseFloat(document.getElementById("fare").value),
+          Cabin: cabinValue === "" ? null : cabinValue,
+          Embarked: document.getElementById("embarked").value,
+        };
+
+        try {
+          predictBtn.disabled = true;
+          predictBtn.textContent = "Predicting...";
+
+          const response = await fetch(API_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(passengerData),
+          });
+
+          if (!response.ok) {
+            throw new Error(
+              "API request failed. Please check your input or server.",
+            );
+          }
+
+          const data = await response.json();
+
+          const probability = Number(data.survival_probability);
+          const probabilityPercentage = Math.round(probability * 100);
+
+          resultCard.classList.add("show");
+
+          if (data.prediction === "Survived") {
+            resultText.textContent = "Survived";
+            resultText.classList.add("survived");
+          } else {
+            resultText.textContent = "Not Survived";
+            resultText.classList.add("not-survived");
+          }
+
+          probabilityText.textContent =
+            "Survival Probability: " + probabilityPercentage + "%";
+
+          probabilityFill.style.width = probabilityPercentage + "%";
+        } catch (error) {
+          resultCard.classList.add("show");
+          resultText.classList.add("error");
+          resultText.textContent = error.message;
+          probabilityText.textContent = "";
+          probabilityFill.style.width = "0%";
+        } finally {
+          predictBtn.disabled = false;
+          predictBtn.textContent = "Predict Survival";
+        }
+      });
+    </script>
+  </body>
+</html>

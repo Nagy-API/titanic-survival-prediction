@@ -8,5 +8,10 @@ venv/
 env/
 
 .DS_Store
-
 *.log
+
+# Runtime database files
+*.sqlite
+*.db
+database/*.sqlite
+database/*.db

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Titanic Survival Prediction</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <main class="page">
+        <header class="hero">
+            <div class="ship-line"></div>
+
+            <div class="hero-content">
+                <p class="eyebrow">ML Classification App · FastAPI · SQLite History</p>
+                <h1>Titanic Survival Intelligence</h1>
+                <p class="subtitle">
+                    Estimate a passenger's survival outcome using a trained machine learning pipeline, then review saved predictions in a clean voyage log.
+                </p>
+
+                <div class="hero-tags">
+                    <span>Pipeline Model</span>
+                    <span>Logistic Regression</span>
+                    <span>ROC AUC 0.865</span>
+                    <span>Prediction Logbook</span>
+                </div>
+            </div>
+
+            <aside class="hero-card">
+                <span class="hero-card-label">Final Model</span>
+                <strong>82.7%</strong>
+                <p>Test Accuracy</p>
+            </aside>
+        </header>
+
+        <section class="insights">
+            <article>
+                <span>01</span>
+                <h3>Passenger Profile</h3>
+                <p>Class, age, sex, fare, family size, cabin availability, and embarked port.</p>
+            </article>
+            <article>
+                <span>02</span>
+                <h3>Survival Probability</h3>
+                <p>The app returns both a label and a probability score for better interpretation.</p>
+            </article>
+            <article>
+                <span>03</span>
+                <h3>Voyage History</h3>
+                <p>Every prediction is stored locally in SQLite for review and reuse.</p>
+            </article>
+        </section>
+
+        <section class="layout">
+            <section class="panel form-panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="section-kicker">Passenger Manifest</p>
+                        <h2>Enter Passenger Details</h2>
+                        <p>Use realistic passenger information. The model will apply the same preprocessing pipeline used during training.</p>
+                    </div>
+                </div>
+
+                {% if error %}
+                <div class="error-box">{{ error }}</div>
+                {% endif %}
+
+                <form action="/predict" method="post" id="predictionForm">
+                    <div class="grid">
+                        <div class="input-group">
+                            <label for="pclass">Passenger Class</label>
+                            <select id="pclass" name="pclass" required>
+                                <option value="1" {% if form_data.get('Pclass') == 1 %}selected{% endif %}>First Class</option>
+                                <option value="2" {% if form_data.get('Pclass') == 2 %}selected{% endif %}>Second Class</option>
+                                <option value="3" {% if form_data.get('Pclass', 3) == 3 %}selected{% endif %}>Third Class</option>
+                            </select>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="sex">Sex</label>
+                            <select id="sex" name="sex" required>
+                                <option value="male" {% if form_data.get('Sex', 'male') == 'male' %}selected{% endif %}>Male</option>
+                                <option value="female" {% if form_data.get('Sex') == 'female' %}selected{% endif %}>Female</option>
+                            </select>
+                        </div>
+
+                        <div class="input-group full">
+                            <label for="name">Passenger Name</label>
+                            <input type="text" id="name" name="name" value="{{ form_data.get('Name', '') }}" placeholder="Example: Nagy, Mr. Youssef" required>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="age">Age</label>
+                            <input type="number" id="age" name="age" min="0" max="100" step="0.1" value="{{ form_data.get('Age', '') }}" placeholder="Example: 25" required>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="fare">Ticket Fare</label>
+                            <input type="number" id="fare" name="fare" min="0" step="0.01" value="{{ form_data.get('Fare', '') }}" placeholder="Example: 35.50" required>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="sibsp">Siblings / Spouses</label>
+                            <input type="number" id="sibsp" name="sibsp" min="0" step="1" value="{{ form_data.get('SibSp', '') }}" placeholder="Example: 1" required>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="parch">Parents / Children</label>
+                            <input type="number" id="parch" name="parch" min="0" step="1" value="{{ form_data.get('Parch', '') }}" placeholder="Example: 0" required>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="cabin">Cabin</label>
+                            <input type="text" id="cabin" name="cabin" value="{{ form_data.get('Cabin') or '' }}" placeholder="Optional, example: C85">
+                        </div>
+
+                        <div class="input-group">
+                            <label for="embarked">Embarked Port</label>
+                            <select id="embarked" name="embarked" required>
+                                <option value="S" {% if form_data.get('Embarked', 'S') == 'S' %}selected{% endif %}>Southampton (S)</option>
+                                <option value="C" {% if form_data.get('Embarked') == 'C' %}selected{% endif %}>Cherbourg (C)</option>
+                                <option value="Q" {% if form_data.get('Embarked') == 'Q' %}selected{% endif %}>Queenstown (Q)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="actions">
+                        <button type="submit" class="primary-btn">Predict Survival</button>
+                        <button type="button" class="secondary-btn" id="sampleBtn">Try Sample</button>
+                        <a href="/" class="clear-btn">Reset</a>
+                    </div>
+                </form>
+
+                {% if prediction_result %}
+                <div class="result {{ 'result-survived' if prediction_result.prediction_code == 1 else 'result-danger' }}">
+                    <div>
+                        <span class="result-label">Prediction Result</span>
+                        <h2>{{ prediction_result.prediction }}</h2>
+                        <p>Survival Probability: {{ prediction_result.survival_percentage }}%</p>
+                    </div>
+                    <div class="gauge" style="--value: {{ prediction_result.survival_percentage }}%;">
+                        <span>{{ prediction_result.survival_percentage }}%</span>
+                    </div>
+                </div>
+                {% endif %}
+            </section>
+
+            <section class="panel history-panel">
+                <div class="history-header">
+                    <div>
+                        <p class="section-kicker">Captain's Log</p>
+                        <h2>Prediction History</h2>
+                        <p>Review the latest saved predictions, inspect inputs, or reuse a passenger scenario.</p>
+                    </div>
+
+                    {% if recent_predictions %}
+                    <form action="/clear-history" method="post">
+                        <button type="submit" class="history-clear-btn">Clear History</button>
+                    </form>
+                    {% endif %}
+                </div>
+
+                {% if recent_predictions %}
+                <div class="history-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Passenger</th>
+                                <th>Class</th>
+                                <th>Probability</th>
+                                <th>Prediction</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in recent_predictions %}
+                            <tr class="history-row">
+                                <td>{{ item.created_at }}</td>
+                                <td>{{ item.name }}</td>
+                                <td>Pclass {{ item.pclass }}</td>
+                                <td>{{ item.survival_percentage }}%</td>
+                                <td><span class="status-pill {{ item.status_class }}">{{ item.prediction_label }}</span></td>
+                                <td class="table-actions">
+                                    <button type="button" class="small-btn details-btn" data-target="details-{{ item.id }}">Details</button>
+                                    <button
+                                        type="button"
+                                        class="small-btn use-btn"
+                                        data-pclass="{{ item.pclass }}"
+                                        data-name="{{ item.name }}"
+                                        data-sex="{{ item.sex }}"
+                                        data-age="{{ item.age }}"
+                                        data-sibsp="{{ item.sibsp }}"
+                                        data-parch="{{ item.parch }}"
+                                        data-fare="{{ item.fare }}"
+                                        data-cabin="{{ item.cabin or '' }}"
+                                        data-embarked="{{ item.embarked }}"
+                                    >Use Again</button>
+                                </td>
+                            </tr>
+                            <tr class="details-row" id="details-{{ item.id }}">
+                                <td colspan="6">
+                                    <div class="details-grid">
+                                        <div><span>Sex</span><strong>{{ item.sex }}</strong></div>
+                                        <div><span>Age</span><strong>{{ item.age }}</strong></div>
+                                        <div><span>Fare</span><strong>{{ item.fare_formatted }}</strong></div>
+                                        <div><span>SibSp</span><strong>{{ item.sibsp }}</strong></div>
+                                        <div><span>Parch</span><strong>{{ item.parch }}</strong></div>
+                                        <div><span>Cabin</span><strong>{{ item.cabin_display }}</strong></div>
+                                        <div><span>Embarked</span><strong>{{ item.embarked }}</strong></div>
+                                        <div><span>Raw Probability</span><strong>{{ item.survival_probability }}</strong></div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-icon">⚓</div>
+                    <h3>No predictions yet</h3>
+                    <p>Submit the first passenger profile to start building the local voyage history.</p>
+                </div>
+                {% endif %}
+            </section>
+        </section>
+    </main>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
