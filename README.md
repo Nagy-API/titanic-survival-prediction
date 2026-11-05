@@ -152,6 +152,16 @@ Titanic/
 └── .gitignore
 ```
 
+## Repository Version and Portfolio Review
+
+**Canonical/current implementation:** Use the files at the **repository root** (`app/`, `notebook/Titanic.ipynb`, `model/`, `requirements.txt`). The nested `titanic-survival-prediction/` folders are older historical copies, not the current FastAPI + SQLite dashboard. Do not run their legacy `app/main.py` or quote their old README as the final system.
+
+The project's recorded **held-out test metrics** come from the 179-row stratified test split: **82.68% accuracy**, **0.788 precision**, **0.754 recall**, **0.770 F1** and **0.865 ROC AUC**. `model/model_comparison.csv` contains *training-only cross-validation means*, not holdout results. These values were inspected in source files rather than independently recomputed in the documentation review.
+
+The web app is designed as a **local learning/demo application**. SQLite prediction history is global and unauthenticated. If you deploy to a shared public server, isolate/secure saved prediction records, protect or remove history deletion, review CORS and align form/API input validation. `requirements.txt` currently does **not** pin exact package versions; loading Joblib artifacts requires trusted compatible dependencies.
+
+For canonical code pointers, evidence, reproducibility boundaries and optional nonblocking cleanup tasks see [docs/PORTFOLIO_SOURCE_REVIEW.md](docs/PORTFOLIO_SOURCE_REVIEW.md).
+
 ## How to Run
 
 ### 1. Install dependencies
