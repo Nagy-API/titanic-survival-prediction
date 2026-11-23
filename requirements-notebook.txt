@@ -1,0 +1,3 @@
+nbconvert==7.16.6
+ipykernel==6.29.5
+matplotlib==3.10.3

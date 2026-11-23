@@ -1,0 +1,6 @@
+-r requirements.txt
+-r requirements-notebook.txt
+httpx==0.28.1
+playwright==1.52.0
+pytest==8.4.1
+ruff==0.11.13

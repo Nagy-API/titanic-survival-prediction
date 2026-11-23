@@ -1,232 +1,196 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Explore Titanic passenger survival with a reproducible historical machine learning model.">
     <title>Titanic Survival Prediction</title>
+    <link rel="icon" href="/static/favicon.png" type="image/png">
     <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/script.js" defer></script>
 </head>
 <body>
+    <a class="skip-link" href="#passenger">Skip to passenger form</a>
     <main class="page">
         <header class="hero">
-            <div class="ship-line"></div>
-
+            <div class="ship-line" aria-hidden="true"></div>
             <div class="hero-content">
-                <p class="eyebrow">ML Classification App · FastAPI · SQLite History</p>
-                <h1>Titanic Survival Intelligence</h1>
-                <p class="subtitle">
-                    Estimate a passenger's survival outcome using a trained machine learning pipeline, then review saved predictions in a clean voyage log.
-                </p>
-
-                <div class="hero-tags">
-                    <span>Pipeline Model</span>
-                    <span>Logistic Regression</span>
-                    <span>ROC AUC 0.865</span>
-                    <span>Prediction Logbook</span>
-                </div>
+                <p class="eyebrow">RMS Titanic · 1912</p>
+                <h1>Titanic Survival Prediction</h1>
+                <p class="subtitle">Explore how passenger records from the voyage inform a machine learning estimate of survival.</p>
+                <a class="text-link" href="#evaluation">Explore the evaluation <span aria-hidden="true">↓</span></a>
             </div>
-
-            <aside class="hero-card">
-                <span class="hero-card-label">Final Model</span>
-                <strong>82.7%</strong>
-                <p>Test Accuracy</p>
+            {% if metrics and metrics.test_roc_auc is defined %}
+            <aside class="hero-card" aria-label="Model at a glance">
+                <p class="hero-card-label">{{ metrics.selected_model }}</p>
+                <strong>{{ "%.3f"|format(metrics.test_roc_auc) }}</strong>
+                <p>ROC AUC on the historical test split</p>
             </aside>
+            {% endif %}
         </header>
 
-        <section class="insights">
-            <article>
-                <span>01</span>
-                <h3>Passenger Profile</h3>
-                <p>Class, age, sex, fare, family size, cabin availability, and embarked port.</p>
-            </article>
-            <article>
-                <span>02</span>
-                <h3>Survival Probability</h3>
-                <p>The app returns both a label and a probability score for better interpretation.</p>
-            </article>
-            <article>
-                <span>03</span>
-                <h3>Voyage History</h3>
-                <p>Every prediction is stored locally in SQLite for review and reuse.</p>
-            </article>
-        </section>
-
-        <section class="layout">
-            <section class="panel form-panel">
-                <div class="panel-header">
-                    <div>
-                        <p class="section-kicker">Passenger Manifest</p>
-                        <h2>Enter Passenger Details</h2>
-                        <p>Use realistic passenger information. The model will apply the same preprocessing pipeline used during training.</p>
-                    </div>
-                </div>
-
-                {% if error %}
-                <div class="error-box">{{ error }}</div>
-                {% endif %}
-
-                <form action="/predict" method="post" id="predictionForm">
-                    <div class="grid">
-                        <div class="input-group">
-                            <label for="pclass">Passenger Class</label>
-                            <select id="pclass" name="pclass" required>
-                                <option value="1" {% if form_data.get('Pclass') == 1 %}selected{% endif %}>First Class</option>
-                                <option value="2" {% if form_data.get('Pclass') == 2 %}selected{% endif %}>Second Class</option>
-                                <option value="3" {% if form_data.get('Pclass', 3) == 3 %}selected{% endif %}>Third Class</option>
-                            </select>
+        <div class="layout">
+            <section class="panel form-panel" id="passenger" tabindex="-1" aria-labelledby="passenger-heading">
+                <header class="panel-header">
+                    <p class="section-kicker">Passenger manifest</p>
+                    <h2 id="passenger-heading">Build a passenger profile</h2>
+                    <p>Use a fictional scenario or a historical record. Predictions are processed on request and the app does not retain submitted profiles.</p>
+                </header>
+                <form id="predictionForm" action="/api/predict" method="post">
+                    <fieldset id="passenger-fields" disabled>
+                        <legend class="sr-only">Passenger details</legend>
+                        <div class="grid">
+                            <div class="input-group">
+                                <label for="pclass">Passenger class</label>
+                                <select id="pclass" name="pclass" required>
+                                    <option value="">Select class</option>
+                                    <option value="1">First class</option>
+                                    <option value="2">Second class</option>
+                                    <option value="3">Third class</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label for="sex">Sex in dataset</label>
+                                <select id="sex" name="sex" required>
+                                    <option value="">Select sex</option>
+                                    <option value="female">Female</option>
+                                    <option value="male">Male</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label for="title">Title</label>
+                                <select id="title" name="title" required>
+                                    <option value="">Select title</option>
+                                    <option value="Mr">Mr</option>
+                                    <option value="Mrs">Mrs</option>
+                                    <option value="Miss">Miss</option>
+                                    <option value="Master">Master</option>
+                                    <option value="Rare">Other or unknown</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label for="age">Age (years) <span>Optional</span></label>
+                                <input type="number" id="age" name="age" min="0" max="100" step="any" inputmode="decimal" placeholder="e.g. 28">
+                            </div>
+                            <div class="input-group">
+                                <label for="embarked">Embarkation port</label>
+                                <select id="embarked" name="embarked">
+                                    <option value="">Unknown</option>
+                                    <option value="S">Southampton</option>
+                                    <option value="C">Cherbourg</option>
+                                    <option value="Q">Queenstown</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label for="fare">Ticket fare (£) <span>Optional</span></label>
+                                <input type="number" id="fare" name="fare" min="0" max="600" step="any" inputmode="decimal" placeholder="e.g. 12.50">
+                            </div>
+                            <div class="input-group">
+                                <label for="sibsp">Siblings or spouses</label>
+                                <input type="number" id="sibsp" name="sibsp" min="0" max="20" step="1" inputmode="numeric" value="0" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="parch">Parents or children</label>
+                                <input type="number" id="parch" name="parch" min="0" max="20" step="1" inputmode="numeric" value="0" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="cabin">Cabin recorded</label>
+                                <select id="cabin" name="cabin">
+                                    <option value="false">No or unknown</option>
+                                    <option value="true">Yes</option>
+                                </select>
+                            </div>
                         </div>
-
-                        <div class="input-group">
-                            <label for="sex">Sex</label>
-                            <select id="sex" name="sex" required>
-                                <option value="male" {% if form_data.get('Sex', 'male') == 'male' %}selected{% endif %}>Male</option>
-                                <option value="female" {% if form_data.get('Sex') == 'female' %}selected{% endif %}>Female</option>
-                            </select>
+                        <p class="field-note">Count relatives traveling aboard. Unknown ages, fares and ports use values learned during training.</p>
+                        <div class="actions">
+                            <button type="submit" class="primary-btn" id="predictBtn">Predict survival</button>
+                            <button type="button" class="secondary-btn" id="sampleBtn">Try a sample</button>
+                            <button type="reset" class="clear-btn" id="resetBtn">Reset</button>
                         </div>
-
-                        <div class="input-group full">
-                            <label for="name">Passenger Name</label>
-                            <input type="text" id="name" name="name" value="{{ form_data.get('Name', '') }}" placeholder="Example: Nagy, Mr. Youssef" required>
-                        </div>
-
-                        <div class="input-group">
-                            <label for="age">Age</label>
-                            <input type="number" id="age" name="age" min="0" max="100" step="0.1" value="{{ form_data.get('Age', '') }}" placeholder="Example: 25" required>
-                        </div>
-
-                        <div class="input-group">
-                            <label for="fare">Ticket Fare</label>
-                            <input type="number" id="fare" name="fare" min="0" step="0.01" value="{{ form_data.get('Fare', '') }}" placeholder="Example: 35.50" required>
-                        </div>
-
-                        <div class="input-group">
-                            <label for="sibsp">Siblings / Spouses</label>
-                            <input type="number" id="sibsp" name="sibsp" min="0" step="1" value="{{ form_data.get('SibSp', '') }}" placeholder="Example: 1" required>
-                        </div>
-
-                        <div class="input-group">
-                            <label for="parch">Parents / Children</label>
-                            <input type="number" id="parch" name="parch" min="0" step="1" value="{{ form_data.get('Parch', '') }}" placeholder="Example: 0" required>
-                        </div>
-
-                        <div class="input-group">
-                            <label for="cabin">Cabin</label>
-                            <input type="text" id="cabin" name="cabin" value="{{ form_data.get('Cabin') or '' }}" placeholder="Optional, example: C85">
-                        </div>
-
-                        <div class="input-group">
-                            <label for="embarked">Embarked Port</label>
-                            <select id="embarked" name="embarked" required>
-                                <option value="S" {% if form_data.get('Embarked', 'S') == 'S' %}selected{% endif %}>Southampton (S)</option>
-                                <option value="C" {% if form_data.get('Embarked') == 'C' %}selected{% endif %}>Cherbourg (C)</option>
-                                <option value="Q" {% if form_data.get('Embarked') == 'Q' %}selected{% endif %}>Queenstown (Q)</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="actions">
-                        <button type="submit" class="primary-btn">Predict Survival</button>
-                        <button type="button" class="secondary-btn" id="sampleBtn">Try Sample</button>
-                        <a href="/" class="clear-btn">Reset</a>
-                    </div>
+                    </fieldset>
+                    <noscript><p class="field-note">Enable JavaScript to use the form or read the <a href="https://github.com/Nagy-API/titanic-survival-prediction#api">prediction API guide</a>.</p></noscript>
+                    <p id="prediction-error" class="error-box" role="alert"></p>
                 </form>
-
-                {% if prediction_result %}
-                <div class="result {{ 'result-survived' if prediction_result.prediction_code == 1 else 'result-danger' }}">
-                    <div>
-                        <span class="result-label">Prediction Result</span>
-                        <h2>{{ prediction_result.prediction }}</h2>
-                        <p>Survival Probability: {{ prediction_result.survival_percentage }}%</p>
-                    </div>
-                    <div class="gauge" style="--value: {{ prediction_result.survival_percentage }}%;">
-                        <span>{{ prediction_result.survival_percentage }}%</span>
-                    </div>
-                </div>
-                {% endif %}
             </section>
 
-            <section class="panel history-panel">
-                <div class="history-header">
-                    <div>
-                        <p class="section-kicker">Captain's Log</p>
-                        <h2>Prediction History</h2>
-                        <p>Review the latest saved predictions, inspect inputs, or reuse a passenger scenario.</p>
+            <section class="panel result-panel" aria-labelledby="result-heading">
+                <header class="panel-header">
+                    <p class="section-kicker">Model estimate</p>
+                    <h2 id="result-heading">Survival prediction</h2>
+                </header>
+                <p id="prediction-status" class="empty-state" role="status">Submit a passenger profile to see the model estimate.</p>
+                <div id="prediction-result" class="result" role="region" tabindex="-1" aria-labelledby="prediction-label" hidden>
+                    <div class="result-header">
+                        <p class="result-label">Predicted classification</p>
+                        <h3 id="prediction-label"></h3>
                     </div>
-
-                    {% if recent_predictions %}
-                    <form action="/clear-history" method="post">
-                        <button type="submit" class="history-clear-btn">Clear History</button>
-                    </form>
-                    {% endif %}
+                    <div class="probability">
+                        <label for="probability-meter">Estimated survival probability</label>
+                        <strong id="prediction-percentage"></strong>
+                        <meter id="probability-meter" min="0" max="100" value="0"></meter>
+                    </div>
+                    <p class="result-note">This score reflects patterns in the historical sample. It gives limited evidence about any individual passenger’s outcome.</p>
+                    <details>
+                        <summary>Inputs used for this estimate</summary>
+                        <dl id="used-inputs" class="used-inputs"></dl>
+                    </details>
+                    <a class="edit-link" href="#passenger">Edit passenger profile</a>
                 </div>
-
-                {% if recent_predictions %}
-                <div class="history-scroll">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Time</th>
-                                <th>Passenger</th>
-                                <th>Class</th>
-                                <th>Probability</th>
-                                <th>Prediction</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for item in recent_predictions %}
-                            <tr class="history-row">
-                                <td>{{ item.created_at }}</td>
-                                <td>{{ item.name }}</td>
-                                <td>Pclass {{ item.pclass }}</td>
-                                <td>{{ item.survival_percentage }}%</td>
-                                <td><span class="status-pill {{ item.status_class }}">{{ item.prediction_label }}</span></td>
-                                <td class="table-actions">
-                                    <button type="button" class="small-btn details-btn" data-target="details-{{ item.id }}">Details</button>
-                                    <button
-                                        type="button"
-                                        class="small-btn use-btn"
-                                        data-pclass="{{ item.pclass }}"
-                                        data-name="{{ item.name }}"
-                                        data-sex="{{ item.sex }}"
-                                        data-age="{{ item.age }}"
-                                        data-sibsp="{{ item.sibsp }}"
-                                        data-parch="{{ item.parch }}"
-                                        data-fare="{{ item.fare }}"
-                                        data-cabin="{{ item.cabin or '' }}"
-                                        data-embarked="{{ item.embarked }}"
-                                    >Use Again</button>
-                                </td>
-                            </tr>
-                            <tr class="details-row" id="details-{{ item.id }}">
-                                <td colspan="6">
-                                    <div class="details-grid">
-                                        <div><span>Sex</span><strong>{{ item.sex }}</strong></div>
-                                        <div><span>Age</span><strong>{{ item.age }}</strong></div>
-                                        <div><span>Fare</span><strong>{{ item.fare_formatted }}</strong></div>
-                                        <div><span>SibSp</span><strong>{{ item.sibsp }}</strong></div>
-                                        <div><span>Parch</span><strong>{{ item.parch }}</strong></div>
-                                        <div><span>Cabin</span><strong>{{ item.cabin_display }}</strong></div>
-                                        <div><span>Embarked</span><strong>{{ item.embarked }}</strong></div>
-                                        <div><span>Raw Probability</span><strong>{{ item.survival_probability }}</strong></div>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="empty-state">
-                    <div class="empty-icon">⚓</div>
-                    <h3>No predictions yet</h3>
-                    <p>Submit the first passenger profile to start building the local voyage history.</p>
-                </div>
-                {% endif %}
+                <p class="model-note">The model uses title, cabin availability, family size and log fare along with age, class, sex and port. These inputs reflect how the historical records were collected.</p>
             </section>
+        </div>
+
+        <section class="panel evaluation" id="evaluation" aria-labelledby="evaluation-heading">
+            <header class="panel-header">
+                <p class="section-kicker">Model evaluation</p>
+                <h2 id="evaluation-heading">How the estimate was built</h2>
+                <p>A stratified split reserved a portion of the historical sample for evaluation. Five-fold cross-validation on the training portion compared a majority-class baseline, Logistic Regression and Random Forest. Each fold learned imputation, encoding and scaling from its own training data.</p>
+            </header>
+            {% if metrics and metrics.test_roc_auc is defined %}
+            <div class="evaluation-grid">
+                <div>
+                    <h3>Historical test split</h3>
+                    <dl class="metrics">
+                        <div><dt>Accuracy</dt><dd>{{ "%.1f%%"|format(metrics.test_accuracy * 100) }}</dd></div>
+                        <div><dt>Precision</dt><dd>{{ "%.1f%%"|format(metrics.test_precision * 100) }}</dd></div>
+                        <div><dt>Recall</dt><dd>{{ "%.1f%%"|format(metrics.test_recall * 100) }}</dd></div>
+                        <div><dt>F1</dt><dd>{{ "%.3f"|format(metrics.test_f1) }}</dd></div>
+                    </dl>
+                </div>
+                <table>
+                    <caption>Confusion matrix</caption>
+                    <thead><tr><td></td><th scope="col">Predicted loss</th><th scope="col">Predicted survival</th></tr></thead>
+                    <tbody>
+                        <tr><th scope="row">Actual loss</th><td>{{ metrics.confusion_matrix[0][0] }}</td><td>{{ metrics.confusion_matrix[0][1] }}</td></tr>
+                        <tr><th scope="row">Actual survival</th><td>{{ metrics.confusion_matrix[1][0] }}</td><td>{{ metrics.confusion_matrix[1][1] }}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            {% if metrics.cross_validation is defined %}
+            <details class="comparison">
+                <summary>Compare training cross-validation scores</summary>
+                <table>
+                    <caption class="sr-only">Mean five-fold cross-validation scores</caption>
+                    <thead><tr><th scope="col">Model</th><th scope="col">F1</th><th scope="col">ROC AUC</th></tr></thead>
+                    <tbody>
+                        {% for row in metrics.cross_validation %}
+                        <tr><th scope="row">{{ row.model }}</th><td>{{ "%.3f"|format(row.f1) }}</td><td>{{ "%.3f"|format(row.roc_auc) }}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </details>
+            {% endif %}
+            {% endif %}
+            <div class="limits">
+                <h3>Limits of the evidence</h3>
+                <p>An earlier notebook consulted this test split during development. These scores are retrospective. The sample covers one voyage and has missing records, including cabin and age. Associations involving sex, class and title reflect historical passenger records and the conditions of the disaster.</p>
+            </div>
+            <nav class="links" aria-label="Project resources">
+                <a href="https://github.com/Nagy-API/titanic-survival-prediction">Source code</a>
+                <a href="https://github.com/Nagy-API/titanic-survival-prediction/blob/main/notebook/Titanic.ipynb">Training notebook</a>
+                <a href="/openapi.json">API schema</a>
+            </nav>
         </section>
     </main>
-
-    <script src="/static/script.js"></script>
 </body>
 </html>

@@ -1,230 +1,113 @@
 # Titanic Survival Prediction
 
-A machine learning classification project that predicts whether a Titanic passenger was likely to survive based on passenger details such as class, sex, age, fare, family size, cabin availability, and embarked port.
+An end-to-end ML engineering project for estimating Titanic survival from historical passenger attributes. It includes a reproducible scikit-learn experiment, a stateless FastAPI inference API, and a browser demo for exploring fictional scenarios.
 
-This upgraded version includes a clean scikit-learn training workflow, a saved full pipeline model, a FastAPI web app, a premium Titanic-themed dashboard UI, and SQLite prediction history.
+[Live demo](https://titanic-survival-prediction-nine.vercel.app)
 
-## Project Highlights
+[Experiment notebook](notebook/Titanic.ipynb) · [Evaluation artifacts](model/metrics.json) · [Audit notes](docs/audit.md)
 
-- End-to-end binary classification workflow
-- Professional preprocessing with `Pipeline` and `ColumnTransformer`
-- Reusable feature engineering transformer
-- `DummyClassifier` baseline comparison
-- Cross-validation on the training set only
-- Final test evaluation with classification metrics and ROC AUC
-- Saved full pipeline model using Joblib
-- FastAPI backend
-- Titanic-themed web dashboard
-- SQLite prediction history
-- Use-again and details actions for previous predictions
+## What the model learned
 
-## Dataset
+The task is binary classification on 891 labeled Titanic passenger records. A stratified 80/20 split with seed 42 yielded 712 development records and 179 holdout records. Five shuffled stratified folds on the development partition compared a majority-class baseline, logistic regression, and a depth-limited random forest. Each fold fits its own imputation, scaling, and encoding.
 
-The project uses the Titanic passenger dataset.
+| Development model | Accuracy | Survival F1 | ROC AUC |
+| --- | ---: | ---: | ---: |
+| Majority-class baseline | 0.6166 | 0.0000 | 0.5000 |
+| Logistic regression | 0.8244 | 0.7683 | 0.8747 |
+| Random forest | 0.8301 | 0.7649 | 0.8735 |
 
-Important input columns:
+**Logistic regression** had the highest mean development ROC AUC under the selection rule. The 0.0011 difference from random forest is small relative to the fold variability. Logistic regression also keeps the fitted artifact compact and the model straightforward to explain.
 
-- `Pclass`
-- `Name`
-- `Sex`
-- `Age`
-- `SibSp`
-- `Parch`
-- `Fare`
-- `Cabin`
-- `Embarked`
+### Retrospective holdout results
 
-Target column:
+| Accuracy | Survival precision | Survival recall | Survival F1 | ROC AUC |
+| ---: | ---: | ---: | ---: | ---: |
+| 0.8268 | 0.7879 | 0.7536 | 0.7704 | 0.8653 |
 
-- `Survived`
+| Actual ↓ / Predicted → | Did not survive | Survived |
+| --- | ---: | ---: |
+| Did not survive | 96 | 14 |
+| Survived | 17 | 52 |
 
-## Feature Engineering
+The model missed 17 of the 24 male survivors in the holdout and predicted survival for 11 of the 16 female non-survivors. These counts describe this split and include small subgroups. The notebook and metrics file provide the aggregate breakdown by class, recorded sex, and age availability.
 
-The custom feature engineering transformer is stored in:
+The original project had already inspected this split through exploratory analysis and baseline scoring. The revised protocol keeps all model comparisons in development, then repeats the historical evaluation on the same holdout. Of its 179 rows, 67 share a ticket with a development row. Related passengers and the use of a single event limit how far these results generalize. The probability is an uncalibrated model estimate for the entered profile. It carries biases from the event and record collection, including differences by passenger class, recorded sex, and cabin documentation.
 
-```text
-app/ml_pipeline.py
-```
+### Features and preprocessing
 
-Engineered features include:
+The shared transformer uses passenger class, recorded sex, age, embarkation port, normalized title, and whether a cabin was listed. It derives family size and traveling-alone status from the family counts and transforms fare with `log1p`. Traveling-alone status is a threshold derived from family size. Passenger IDs and ticket identifiers are excluded from modeling. Numerical values are median-imputed and scaled. Categories use most-frequent imputation and one-hot encoding with unknown categories ignored. The public form supplies title and cabin availability directly, so it never asks for a name or cabin number.
 
-- `Title`: extracted from passenger names
-- `HasCabin`: whether cabin information exists
-- `FamilySize`: `SibSp + Parch + 1`
-- `IsAlone`: whether the passenger traveled alone
-- `LogFare`: log-transformed fare
+## Run locally
 
-Keeping this logic in one module makes the notebook and FastAPI app consistent.
-
-## Model Comparison
-
-Models were compared using 5-fold stratified cross-validation on the training set.
-
-| Model | CV Accuracy | CV F1 | CV ROC AUC |
-|---|---:|---:|---:|
-| Dummy Baseline | ~0.617 | ~0.000 | ~0.500 |
-| Logistic Regression | ~0.824 | ~0.768 | ~0.875 |
-| Random Forest | ~0.830 | ~0.765 | ~0.874 |
-
-## Final Model
-
-Final selected model:
-
-```text
-Logistic Regression Pipeline
-```
-
-It was selected because it achieved strong performance while staying simple, explainable, and suitable for a portfolio classification project.
-
-Final test results:
-
-| Metric | Score |
-|---|---:|
-| Accuracy | ~0.827 |
-| Precision | ~0.788 |
-| Recall | ~0.754 |
-| F1-score | ~0.770 |
-| ROC AUC | ~0.865 |
-
-The saved model file is:
-
-```text
-model/model.pkl
-```
-
-The model file contains the full pipeline:
-
-- Feature engineering
-- Missing value handling
-- Scaling
-- One-hot encoding
-- Classifier
-
-## Web App
-
-The web app now runs through FastAPI instead of opening a plain static HTML file. This allows the app to save predictions and display history.
-
-Main features:
-
-- Passenger input form
-- Survival prediction label
-- Survival probability gauge
-- SQLite prediction history
-- Details button for each saved prediction
-- Use Again button to refill the form from history
-- Clear History action
-- JSON API endpoint for programmatic predictions
-
-## Project Structure
-
-```text
-Titanic/
-│
-├── app/
-│   ├── __init__.py
-│   ├── index.html                 # Local helper page
-│   ├── main.py                    # FastAPI app
-│   ├── ml_pipeline.py             # Reusable feature engineering
-│   ├── static/
-│   │   ├── script.js
-│   │   └── style.css
-│   └── templates/
-│       └── index.html             # Main dashboard UI
-│
-├── data/
-│   └── Titanic-Dataset.csv
-│
-├── database/
-│   └── .gitkeep                   # Runtime DB is generated locally
-│
-├── model/
-│   ├── model.pkl
-│   ├── metrics.json
-│   └── model_comparison.csv
-│
-├── notebook/
-│   ├── Titanic.ipynb
-│   └── model.pkl
-│
-│
-├── requirements.txt
-├── README.md
-└── .gitignore
-```
-
-## How to Run
-
-### 1. Install dependencies
+Requires Python 3.12.
 
 ```bash
-pip install -r requirements.txt
+python -m venv .venv
+# Activate .venv using your shell, then:
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --no-access-log
 ```
 
-### 2. Run the FastAPI server
+Open `http://127.0.0.1:8000`. The app loads the bundled pipeline, so prediction works without the training CSV.
 
-From the main project folder, run:
+### Reproduce training and execute the notebook
+
+Download **Titanic Dataset**, version 1, from Kaggle and place `Titanic-Dataset.csv` in `data/`. The dataset listing declares CC0. The download used for verification matches the SHA-256 recorded in the evaluation manifest. The current tree and deployment omit the raw passenger records. [Dataset listing](https://www.kaggle.com/datasets/yasserh/titanic-dataset)
 
 ```bash
-uvicorn app.main:app --reload
+python -m pip install -r requirements-dev.txt
+python train.py --data data/Titanic-Dataset.csv --output-dir model
+python -m nbconvert --to notebook --execute notebook/Titanic.ipynb --output Titanic.executed.ipynb
 ```
 
-### 3. Open the web app
+The trainer chooses the model, scores the fitted winner, and writes the pipeline and its metrics together. The notebook uses the same experiment code and displays aggregate results. The manifest records the seed, versions, source checksum, and model checksum. The checked-in digest identifies the deployed binary. Reproducing numerical results across platforms does not require identical serialized bytes.
 
-Open:
+Run one trainer per output directory. For release candidates, use a fresh output directory and validate the generated pair before copying it into the deployment. If an export is interrupted, rerun it to regenerate both files.
 
-```text
-http://127.0.0.1:8000
-```
+## API
 
-API documentation:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-Health check:
-
-```text
-http://127.0.0.1:8000/health
-```
-
-## API Example
-
-Endpoint:
-
-```text
-POST /api/predict
-```
-
-Example input:
+`POST /api/predict` accepts JSON with the following shape.
 
 ```json
 {
   "Pclass": 3,
-  "Name": "Nagy, Mr. Youssef",
   "Sex": "male",
   "Age": 23,
   "SibSp": 1,
   "Parch": 0,
   "Fare": 12.5,
-  "Cabin": null,
-  "Embarked": "S"
+  "Embarked": "S",
+  "Title": "Mr",
+  "HasCabin": false
 }
 ```
 
-Example output:
+The response includes `prediction`, `prediction_code` (0 or 1), `survival_probability` (0–1), and `survival_percentage` (rounded for display). All fields are required. Age, fare, and port accept `null` when unknown. The [schema](http://127.0.0.1:8000/openapi.json) includes bounds and category values. Invalid fields return 422, oversized bodies return 413, and unavailable inference returns 503. `GET /health` returns the verified model checksum when the app is ready.
 
-```json
-{
-  "prediction": "Not Survived",
-  "prediction_code": 0,
-  "survival_probability": 0.2146,
-  "survival_percentage": 21.5
-}
+## Architecture and deployment
+
+```text
+HTML and vanilla JS → same-origin FastAPI → validated passenger data
+                                         → shared preprocessing pipeline
+                                         → fitted logistic regression
 ```
 
-## Notes
+Inference has no data store or session history. The server verifies the bundled model digest and ML dependency versions before deserializing it. The deployment uses the Vercel FastAPI integration with Python 3.12 and pinned runtime dependencies. Notebook libraries, raw data, tests, and local databases are excluded by `.vercelignore`. [Vercel FastAPI documentation](https://vercel.com/docs/frameworks/backend/fastapi)
 
-- The SQLite database is created automatically at runtime in the `database/` folder.
-- Runtime database files are ignored by Git using `.gitignore`.
-- To preserve consistency, the API uses the saved full pipeline directly instead of manually repeating preprocessing steps.
+### Checks
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m playwright install chromium
+python -m ruff check .
+node --check app/static/script.js
+python -m pytest -q
+```
+
+CI runs on pull requests and main. It covers feature behavior, inference parity, request validation, privacy regressions, and Chromium interactions. With the verified CSV present locally, the suite also reruns the training experiment.
+
+## Screenshots
+
+<img src="docs/screenshots/desktop.png" alt="Desktop demo showing a passenger profile, survival estimate, and model evaluation" width="900">
+
+<img src="docs/screenshots/mobile.png" alt="Mobile demo showing the same profile, estimate, and evaluation in a single column" width="340">

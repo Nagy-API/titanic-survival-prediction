@@ -1,337 +1,173 @@
+"""Stateless inference for the Titanic portfolio demo."""
+
+import hashlib
+import io
+import json
+import logging
+from importlib.metadata import version
 from pathlib import Path
-import sqlite3
-from typing import Literal, Optional
+from typing import Literal
 
 import joblib
 import pandas as pd
-from fastapi import FastAPI, Form, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from starlette.concurrency import run_in_threadpool
+from starlette.requests import ClientDisconnect
 
-# Importing this module is important because the saved Joblib pipeline uses
-# TitanicFeatureEngineer from app.ml_pipeline.
-from app.ml_pipeline import TitanicFeatureEngineer  # noqa: F401
+APP_DIR = Path(__file__).resolve().parent
+MODEL_DIR = APP_DIR.parent / "model"
+MAX_REQUEST_BYTES = 2048
+MODEL_PACKAGES = ("scikit-learn", "numpy", "pandas", "scipy", "joblib", "threadpoolctl")
+LOG = logging.getLogger(__name__)
 
-
-BASE_DIR = Path(__file__).resolve().parent
-ROOT_DIR = BASE_DIR.parent
-MODEL_PATH = ROOT_DIR / "model" / "model.pkl"
-DB_DIR = ROOT_DIR / "database"
-DB_PATH = DB_DIR / "predictions.db"
-
-model = joblib.load(MODEL_PATH)
-
-templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
-
-app = FastAPI(
-    title="Titanic Survival Prediction API",
-    description="A FastAPI app that predicts Titanic passenger survival and stores prediction history.",
-    version="3.0",
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.mount(
-    "/static",
-    StaticFiles(directory=str(BASE_DIR / "static")),
-    name="static",
-)
+SECURITY_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'self'; base-uri 'none'; object-src 'none'; "
+        "frame-ancestors 'none'; form-action 'self'"
+    ),
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+}
 
 
-class TitanicInput(BaseModel):
-    Pclass: Literal[1, 2, 3]
-    Name: str = Field(..., min_length=1, description="Passenger name, including title such as Mr, Mrs, or Miss")
+class Passenger(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid", allow_inf_nan=False)
+
+    Pclass: int = Field(ge=1, le=3)
     Sex: Literal["male", "female"]
-    Age: float = Field(..., ge=0, le=100)
-    SibSp: int = Field(..., ge=0)
-    Parch: int = Field(..., ge=0)
-    Fare: float = Field(..., ge=0)
-    Cabin: Optional[str] = None
-    Embarked: Literal["S", "C", "Q"]
+    Age: float | None = Field(ge=0, le=100)
+    SibSp: int = Field(ge=0, le=20)
+    Parch: int = Field(ge=0, le=20)
+    Fare: float | None = Field(ge=0, le=600)
+    Embarked: Literal["S", "C", "Q"] | None
+    Title: Literal["Mr", "Mrs", "Miss", "Master", "Rare"]
+    HasCabin: bool
 
 
-def to_dict(data: TitanicInput) -> dict:
-    """Support both Pydantic v1 and v2."""
-    if hasattr(data, "model_dump"):
-        return data.model_dump()
-    return data.dict()
+class Prediction(BaseModel):
+    prediction: Literal["Survived", "Not Survived"]
+    prediction_code: Literal[0, 1]
+    survival_probability: float
+    survival_percentage: float
 
 
-def init_db() -> None:
-    DB_DIR.mkdir(exist_ok=True)
+def load_model(model_dir: Path):
+    """Verify the bundled, repository-controlled artifact before deserializing."""
+    metrics = json.loads((model_dir / "metrics.json").read_text(encoding="utf-8"))
+    artifact = (model_dir / "model.pkl").read_bytes()
+    digest = hashlib.sha256(artifact).hexdigest()
+    if digest != metrics["artifact_sha256"]:
+        raise ValueError("Model checksum mismatch")
+    if any(metrics["versions"][name] != version(name) for name in MODEL_PACKAGES):
+        raise ValueError("Model dependency version mismatch")
 
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS predictions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                pclass INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                sex TEXT NOT NULL,
-                age REAL NOT NULL,
-                sibsp INTEGER NOT NULL,
-                parch INTEGER NOT NULL,
-                fare REAL NOT NULL,
-                cabin TEXT,
-                embarked TEXT NOT NULL,
-                prediction_code INTEGER NOT NULL,
-                prediction_label TEXT NOT NULL,
-                survival_probability REAL NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        conn.commit()
+    model = joblib.load(io.BytesIO(artifact))
+    if model.classes_.tolist() != [0, 1]:
+        raise ValueError("Unexpected model classes")
+    return model, metrics
 
 
-def normalize_form_data(
-    pclass: int,
-    name: str,
-    sex: str,
-    age: float,
-    sibsp: int,
-    parch: int,
-    fare: float,
-    cabin: Optional[str],
-    embarked: str,
-) -> dict:
-    clean_cabin = cabin.strip() if cabin else None
-    if clean_cabin == "":
-        clean_cabin = None
+async def read_passenger(request: Request) -> Passenger:
+    if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "application/json":
+        raise HTTPException(415, "Send an application/json request.")
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        if not content_length.isascii() or not content_length.isdecimal():
+            raise HTTPException(400, "Invalid request size.")
+        if len(content_length) > 10 or int(content_length) > MAX_REQUEST_BYTES:
+            raise HTTPException(413, "Request body is too large.")
 
-    return {
-        "Pclass": int(pclass),
-        "Name": name.strip(),
-        "Sex": sex,
-        "Age": float(age),
-        "SibSp": int(sibsp),
-        "Parch": int(parch),
-        "Fare": float(fare),
-        "Cabin": clean_cabin,
-        "Embarked": embarked,
-    }
+    body = bytearray()
+    try:
+        async for chunk in request.stream():
+            if len(body) + len(chunk) > MAX_REQUEST_BYTES:
+                raise HTTPException(413, "Request body is too large.")
+            body.extend(chunk)
+    except ClientDisconnect:
+        raise HTTPException(400, "Incomplete request.") from None
+
+    try:
+        return Passenger.model_validate_json(body)
+    except ValidationError:
+        raise HTTPException(422, "Check the passenger fields and try again.") from None
 
 
-def run_prediction(passenger_data: dict) -> dict:
-    input_data = pd.DataFrame([passenger_data])
-
-    prediction_code = int(model.predict(input_data)[0])
-    survival_probability = float(model.predict_proba(input_data)[0][1])
-    prediction_label = "Survived" if prediction_code == 1 else "Not Survived"
-
-    return {
-        "prediction": prediction_label,
-        "prediction_code": prediction_code,
-        "survival_probability": round(survival_probability, 4),
-        "survival_percentage": round(survival_probability * 100, 1),
-    }
-
-
-def save_prediction(passenger_data: dict, prediction_result: dict) -> None:
-    init_db()
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO predictions (
-                pclass,
-                name,
-                sex,
-                age,
-                sibsp,
-                parch,
-                fare,
-                cabin,
-                embarked,
-                prediction_code,
-                prediction_label,
-                survival_probability
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                passenger_data["Pclass"],
-                passenger_data["Name"],
-                passenger_data["Sex"],
-                passenger_data["Age"],
-                passenger_data["SibSp"],
-                passenger_data["Parch"],
-                passenger_data["Fare"],
-                passenger_data["Cabin"],
-                passenger_data["Embarked"],
-                prediction_result["prediction_code"],
-                prediction_result["prediction"],
-                prediction_result["survival_probability"],
-            ),
-        )
-        conn.commit()
+def infer(model, passenger: Passenger) -> Prediction:
+    frame = pd.DataFrame([passenger.model_dump()])
+    probability = float(model.predict_proba(frame)[0, 1])
+    if not 0 <= probability <= 1:
+        raise ValueError("Invalid model probability")
+    code = int(model.predict(frame)[0])
+    return Prediction(
+        prediction="Survived" if code else "Not Survived",
+        prediction_code=code,
+        survival_probability=probability,
+        survival_percentage=round(probability * 100, 1),
+    )
 
 
-def get_recent_predictions(limit: int = 10) -> list[dict]:
-    init_db()
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT
-                id,
-                pclass,
-                name,
-                sex,
-                age,
-                sibsp,
-                parch,
-                fare,
-                cabin,
-                embarked,
-                prediction_code,
-                prediction_label,
-                survival_probability,
-                created_at
-            FROM predictions
-            ORDER BY id DESC
-            LIMIT ?
-            """,
-            (limit,),
-        )
-        rows = cursor.fetchall()
+def create_app(model_dir: Path = MODEL_DIR) -> FastAPI:
+    api = FastAPI(
+        title="Titanic Survival Prediction",
+        description="Classify a passenger scenario with a historical-data model.",
+        version="4.0.0",
+        docs_url=None,
+        redoc_url=None,
+    )
+    try:
+        model, metrics = load_model(model_dir)
+    except Exception:
+        LOG.error("Titanic model unavailable during initialization")
+        model, metrics = None, {}
 
-    predictions = []
-    for row in rows:
-        item = dict(row)
-        item["survival_percentage"] = round(float(item["survival_probability"]) * 100, 1)
-        item["fare_formatted"] = f"${float(item['fare']):,.2f}"
-        item["cabin_display"] = item["cabin"] or "Unknown"
-        item["status_class"] = "survived" if item["prediction_code"] == 1 else "not-survived"
-        predictions.append(item)
+    @api.middleware("http")
+    async def add_security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers.update(SECURITY_HEADERS)
+        if request.url.path.startswith("/api/") or request.url.path == "/health":
+            response.headers["Cache-Control"] = "no-store"
+        return response
 
-    return predictions
+    templates = Jinja2Templates(directory=APP_DIR / "templates")
+    api.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
 
+    @api.get("/", response_class=HTMLResponse, include_in_schema=False)
+    def home(request: Request):
+        return templates.TemplateResponse(request, "index.html", {"metrics": metrics})
 
-def clear_prediction_history() -> None:
-    init_db()
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM predictions")
-        conn.commit()
+    @api.get("/health")
+    def health():
+        if model is None:
+            return JSONResponse({"status": "unavailable"}, status_code=503)
+        return {"status": "ok", "model_sha256": metrics["artifact_sha256"]}
 
-
-def validate_passenger_data(passenger_data: dict) -> Optional[str]:
-    if passenger_data["Name"] == "":
-        return "Passenger name is required."
-
-    if passenger_data["Age"] < 0 or passenger_data["Age"] > 100:
-        return "Age must be between 0 and 100."
-
-    if passenger_data["Fare"] < 0:
-        return "Fare cannot be negative."
-
-    if passenger_data["SibSp"] < 0 or passenger_data["Parch"] < 0:
-        return "Family counts cannot be negative."
-
-    return None
-
-
-def render_home(
-    request: Request,
-    prediction_result: Optional[dict] = None,
-    form_data: Optional[dict] = None,
-    error: Optional[str] = None,
-):
-    recent_predictions = get_recent_predictions()
-
-    return templates.TemplateResponse(
-        request=request,
-        name="index.html",
-        context={
-            "prediction_result": prediction_result,
-            "form_data": form_data or {},
-            "error": error,
-            "recent_predictions": recent_predictions,
+    @api.post(
+        "/api/predict",
+        response_model=Prediction,
+        openapi_extra={
+            "requestBody": {
+                "required": True,
+                "content": {"application/json": {"schema": Passenger.model_json_schema()}},
+            }
         },
     )
+    async def predict(request: Request):
+        passenger = await read_passenger(request)
+        if model is None:
+            raise HTTPException(503, "The prediction model is unavailable.")
+        try:
+            return await run_in_threadpool(infer, model, passenger)
+        except Exception:
+            LOG.error("Titanic inference failed")
+            raise HTTPException(503, "Prediction is temporarily unavailable.") from None
+
+    return api
 
 
-@app.on_event("startup")
-def startup_event() -> None:
-    init_db()
-
-
-@app.get("/", response_class=HTMLResponse)
-def home(request: Request):
-    return render_home(request)
-
-
-@app.post("/predict", response_class=HTMLResponse)
-def predict_from_form(
-    request: Request,
-    pclass: int = Form(...),
-    name: str = Form(...),
-    sex: str = Form(...),
-    age: float = Form(...),
-    sibsp: int = Form(...),
-    parch: int = Form(...),
-    fare: float = Form(...),
-    cabin: Optional[str] = Form(None),
-    embarked: str = Form(...),
-):
-    form_data = normalize_form_data(
-        pclass=pclass,
-        name=name,
-        sex=sex,
-        age=age,
-        sibsp=sibsp,
-        parch=parch,
-        fare=fare,
-        cabin=cabin,
-        embarked=embarked,
-    )
-
-    validation_error = validate_passenger_data(form_data)
-    if validation_error:
-        return render_home(request, form_data=form_data, error=validation_error)
-
-    prediction_result = run_prediction(form_data)
-    save_prediction(form_data, prediction_result)
-
-    return render_home(
-        request,
-        prediction_result=prediction_result,
-        form_data=form_data,
-    )
-
-
-@app.post("/api/predict")
-def predict_api(data: TitanicInput):
-    passenger_data = to_dict(data)
-    prediction_result = run_prediction(passenger_data)
-    save_prediction(passenger_data, prediction_result)
-
-    return prediction_result
-
-
-@app.get("/api/history")
-def history_api():
-    return {"recent_predictions": get_recent_predictions()}
-
-
-@app.post("/clear-history")
-def clear_history():
-    clear_prediction_history()
-    return RedirectResponse(url="/", status_code=303)
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok", "model_version": "pipeline-v3", "history_enabled": True}
+app = create_app()
