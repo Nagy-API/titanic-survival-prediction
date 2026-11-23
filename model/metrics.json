@@ -1,5 +1,54 @@
 {
   "selected_model": "Logistic Regression",
+  "selection_rule": "Highest mean development CV ROC AUC among learned candidates; exact ties favor Logistic Regression.",
+  "cross_validation": [
+    {
+      "model": "Logistic Regression",
+      "accuracy": 0.8244459765586527,
+      "accuracy_std": 0.013969440686247012,
+      "precision": 0.7814590266214012,
+      "precision_std": 0.03838019200415831,
+      "recall": 0.7584511784511785,
+      "recall_std": 0.03408737978987764,
+      "f1": 0.7682618671223901,
+      "f1_std": 0.013179344054846803,
+      "roc_auc": 0.8746514254351245,
+      "roc_auc_std": 0.020054817959792984
+    },
+    {
+      "model": "Random Forest",
+      "accuracy": 0.8300797793755541,
+      "accuracy_std": 0.016619768624476883,
+      "precision": 0.8162283706631532,
+      "precision_std": 0.04003609846287217,
+      "recall": 0.7215488215488215,
+      "recall_std": 0.035686423784744986,
+      "f1": 0.7648982898289829,
+      "f1_std": 0.023676220814158135,
+      "roc_auc": 0.8735397206126045,
+      "roc_auc_std": 0.02438088889787769
+    },
+    {
+      "model": "Dummy Baseline",
+      "accuracy": 0.6165763813651137,
+      "accuracy_std": 0.002749420918840616,
+      "precision": 0.0,
+      "precision_std": 0.0,
+      "recall": 0.0,
+      "recall_std": 0.0,
+      "f1": 0.0,
+      "f1_std": 0.0,
+      "roc_auc": 0.5,
+      "roc_auc_std": 0.0
+    }
+  ],
+  "seed": 42,
+  "cv_folds": 5,
+  "holdout_fraction": 0.2,
+  "train_rows": 712,
+  "test_rows": 179,
+  "test_previously_examined": true,
+  "holdout_rows_sharing_a_train_ticket": 67,
   "test_accuracy": 0.8268156424581006,
   "test_precision": 0.7878787878787878,
   "test_recall": 0.7536231884057971,
@@ -41,5 +90,74 @@
       "f1-score": 0.8260562890219427,
       "support": 179.0
     }
+  },
+  "error_breakdown": [
+    {
+      "field": "Passenger class",
+      "group": "1",
+      "passengers": 45,
+      "survivors": 25,
+      "false_positives": 4,
+      "false_negatives": 8
+    },
+    {
+      "field": "Passenger class",
+      "group": "2",
+      "passengers": 34,
+      "survivors": 20,
+      "false_positives": 1,
+      "false_negatives": 2
+    },
+    {
+      "field": "Passenger class",
+      "group": "3",
+      "passengers": 100,
+      "survivors": 24,
+      "false_positives": 9,
+      "false_negatives": 7
+    },
+    {
+      "field": "Sex recorded in dataset",
+      "group": "female",
+      "passengers": 61,
+      "survivors": 45,
+      "false_positives": 11,
+      "false_negatives": 0
+    },
+    {
+      "field": "Sex recorded in dataset",
+      "group": "male",
+      "passengers": 118,
+      "survivors": 24,
+      "false_positives": 3,
+      "false_negatives": 17
+    },
+    {
+      "field": "Age recorded",
+      "group": "No",
+      "passengers": 40,
+      "survivors": 12,
+      "false_positives": 4,
+      "false_negatives": 4
+    },
+    {
+      "field": "Age recorded",
+      "group": "Yes",
+      "passengers": 139,
+      "survivors": 57,
+      "false_positives": 10,
+      "false_negatives": 13
+    }
+  ],
+  "dataset_sha256": "7d118fef8b6ccf7f81111877bc388536f7b1e498a655e3d649d19aaa010e9f6f",
+  "artifact_sha256": "2350c41376f5bcd07d51271e23d6a1e760ad149bb57325983ff2478540de9841",
+  "versions": {
+    "python": "3.12.10",
+    "scikit-learn": "1.6.1",
+    "numpy": "2.2.6",
+    "pandas": "2.2.3",
+    "scipy": "1.15.3",
+    "joblib": "1.5.1",
+    "threadpoolctl": "3.6.0"
   }
 }

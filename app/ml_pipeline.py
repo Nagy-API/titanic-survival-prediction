@@ -1,8 +1,4 @@
-"""Reusable preprocessing objects for the Titanic ML pipeline.
-
-Keeping this transformer in a normal Python module makes the saved Joblib
-pipeline importable from both the notebook and the FastAPI app.
-"""
+"""Shared, stateless feature engineering for historical rows and API scenarios."""
 
 import numpy as np
 import pandas as pd
@@ -10,29 +6,14 @@ from sklearn.base import BaseEstimator, TransformerMixin
 
 
 class TitanicFeatureEngineer(BaseEstimator, TransformerMixin):
-    """Create Titanic-specific features without learning from the test set.
-
-    The transformer does not use the target and does not calculate statistics
-    from the full dataset. Missing values are handled later inside the sklearn
-    preprocessing pipeline.
-    """
+    """Convert raw historical or explicit inference inputs to one feature schema."""
 
     title_mapping = {
         "Mlle": "Miss",
         "Ms": "Miss",
         "Mme": "Mrs",
-        "Dr": "Rare",
-        "Rev": "Rare",
-        "Major": "Rare",
-        "Col": "Rare",
-        "Don": "Rare",
-        "Lady": "Rare",
-        "Sir": "Rare",
-        "Capt": "Rare",
-        "Countess": "Rare",
-        "Jonkheer": "Rare",
-        "Dona": "Rare",
     }
+    titles = ("Mr", "Mrs", "Miss", "Master", "Rare")
 
     output_columns = [
         "Pclass",
@@ -50,24 +31,32 @@ class TitanicFeatureEngineer(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
-        X = pd.DataFrame(X).copy()
+        inputs = pd.DataFrame(X).reindex(columns=[
+            "Pclass", "Sex", "Age", "Embarked", "Name", "Cabin",
+            "Title", "HasCabin", "SibSp", "Parch", "Fare",
+        ])
+        features = inputs[["Pclass", "Sex", "Age", "Embarked"]].copy()
+        for column in ["Pclass", "Age"]:
+            features[column] = pd.to_numeric(features[column], errors="coerce").astype(float)
+        for column in ["Sex", "Embarked"]:
+            features[column] = features[column].astype(object)
+            features[column] = features[column].where(features[column].notna(), np.nan)
 
-        for col in ["Name", "Cabin", "SibSp", "Parch", "Fare"]:
-            if col not in X.columns:
-                X[col] = np.nan
+        extracted_title = inputs["Name"].astype("string").str.extract(
+            r" ([A-Za-z]+)\.", expand=False
+        )
+        title = inputs["Title"].astype("string").fillna(extracted_title)
+        title = title.replace(self.title_mapping)
+        features["Title"] = title.where(title.isin(self.titles), "Rare").astype(object)
 
-        X["Title"] = X["Name"].fillna("").astype(str).str.extract(r" ([A-Za-z]+)\.", expand=False)
-        X["Title"] = X["Title"].replace(self.title_mapping).fillna("Rare")
+        cabin = inputs["Cabin"].astype("string").str.strip()
+        cabin_recorded = (cabin.notna() & ~cabin.isin(["", "nan", "None"])).astype(int)
+        explicit_cabin = pd.to_numeric(inputs["HasCabin"], errors="coerce")
+        features["HasCabin"] = explicit_cabin.fillna(cabin_recorded).astype(int)
 
-        X["HasCabin"] = X["Cabin"].notna().astype(int)
-        X["HasCabin"] = np.where(X["Cabin"].astype(str).str.strip().isin(["", "nan", "None"]), 0, X["HasCabin"])
-
-        X["FamilySize"] = X["SibSp"].fillna(0) + X["Parch"].fillna(0) + 1
-        X["IsAlone"] = (X["FamilySize"] == 1).astype(int)
-        X["LogFare"] = np.log1p(X["Fare"].clip(lower=0))
-
-        for col in self.output_columns:
-            if col not in X.columns:
-                X[col] = np.nan
-
-        return X[self.output_columns]
+        relatives = inputs[["SibSp", "Parch"]].apply(pd.to_numeric, errors="coerce")
+        features["FamilySize"] = relatives.fillna(0).sum(axis=1) + 1
+        features["IsAlone"] = (features["FamilySize"] == 1).astype(int)
+        fare = pd.to_numeric(inputs["Fare"], errors="coerce")
+        features["LogFare"] = np.log1p(fare.clip(lower=0))
+        return features[self.output_columns]

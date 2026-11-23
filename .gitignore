@@ -10,6 +10,14 @@ env/
 .DS_Store
 *.log
 
+.env
+.env.*
+.vercel/
+.pytest_cache/
+.ruff_cache/
+data/*.csv
+*.executed.ipynb
+
 # Runtime database files
 *.sqlite
 *.db
